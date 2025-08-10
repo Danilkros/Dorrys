@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Space Clicker — Telegram Mini Game</title>
+  <meta name="theme-color" content="#0a0e2a" />
+  <style>
+    :root{
+      --bg:#07081b; --bg2:#0b0f2a; --text:#e9f3ff; --muted:#98a8c2; --card:rgba(255,255,255,.05);
+      --accent:#00e5ff; --accent2:#9b5cff; --accent3:#ff4df8; --good:#3bff99; --warn:#ffc857; --bad:#ff4d6d;
+      --r:18px; --shadow:0 0 30px rgba(0,229,255,.25), 0 0 60px rgba(155,92,255,.18);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; color:var(--text);
+      font:500 16px/1.5 Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+      background:
+        radial-gradient(1200px 800px at 80% -10%, #14164a 0%, transparent 60%),
+        radial-gradient(1000px 700px at 20% 110%, #1a1152 0%, transparent 60%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+      overflow:hidden;
+    }
+    #stars{position:fixed; inset:0; z-index:-3}
+    #nebula{position:fixed; inset:0; pointer-events:none; z-index:-2; mix-blend-mode:screen;
+      background:
+        radial-gradient(700px 600px at 20% 30%, rgba(0,229,255,.12), transparent 60%),
+        radial-gradient(900px 700px at 80% 70%, rgba(155,92,255,.12), transparent 60%),
+        radial-gradient(600px 500px at 50% 10%, rgba(255,77,248,.10), transparent 70%);
+    }
+    #vignette{position:fixed; inset:0; pointer-events:none; z-index:-1;
+      background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.4) 80%)}
+
+    header#hud{position:fixed; inset:0 0 auto 0; padding:10px 14px; display:flex; align-items:center; justify-content:space-between;
+      background:linear-gradient(to bottom, rgba(5,6,22,.7), rgba(5,6,22,0)); z-index:5}
+    .left, .right{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .chip{padding:8px 12px; border-radius:12px; background:rgba(255,255,255,.06); box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+    .chip b{letter-spacing:.3px}
+
+    .btn{appearance:none; border:none; cursor:pointer; padding:10px 14px; border-radius:12px; font-weight:800; letter-spacing:.3px; 
+      color:#001116; background:linear-gradient(90deg,var(--accent),var(--accent2)); box-shadow:0 0 0 1px rgba(255,255,255,.08), var(--shadow); transition:.2s transform, .2s filter}
+    .btn:hover{transform:translateY(-1px)}
+    .btn:active{transform:translateY(0)}
+    .ghost{background:transparent; color:var(--text); box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+    .danger{background:linear-gradient(90deg, var(--bad), #ff7f95)}
+    .good{background:linear-gradient(90deg, var(--good), #60ffca); color:#00160b}
+
+    main#app{position:fixed; inset:58px 0 90px 0; display:grid; grid-template-columns:minmax(260px,1fr) 360px; gap:16px; padding:16px}
+    @media (max-width: 980px){ main#app{grid-template-columns:1fr; grid-auto-rows:max-content; overflow:auto} }
+
+    #stage{position:relative; border-radius:var(--r); background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.06), var(--shadow); overflow:hidden; min-height:480px}
+
+    #arena{position:absolute; inset:0; display:grid; place-items:center}
+    .orbit{position:absolute; border-radius:50%; left:50%; top:50%; transform:translate(-50%,-50%); opacity:.28; box-shadow:0 0 0 1px rgba(255,255,255,.08) inset}
+    .o1{width:70vmin; height:70vmin}
+    .o2{width:52vmin; height:52vmin; opacity:.22}
+    .o3{width:36vmin; height:36vmin; opacity:.18}
+
+    #planet{ position:relative; width:min(34vmin,340px); height:min(34vmin,340px); border-radius:50%; border:none; cursor:pointer; isolation:isolate;
+      background: radial-gradient(120% 120% at 30% 30%, rgba(255,255,255,.16) 0%, rgba(255,255,255,.05) 40%, rgba(0,0,0,.3) 65%),
+                  conic-gradient(from 0deg, rgba(255,255,255,.08), rgba(255,255,255,0) 60%),
+                  radial-gradient(80% 80% at 60% 60%, var(--accent) 0%, var(--accent2) 65%, #1b0a3a 100%);
+      filter: drop-shadow(0 0 30px rgba(0,229,255,.35)) drop-shadow(0 0 60px rgba(155,92,255,.25));
+      box-shadow: inset 0 0 40px rgba(0,0,0,.35), inset 0 0 120px rgba(0,0,0,.35);
+      transition: transform .06s ease
+    }
+    #planet:hover{transform:scale(1.02)}
+    #planet:active{transform:scale(.985)}
+    .rings{position:absolute; inset:-18%; border-radius:50%; border:2px solid rgba(255,255,255,.08); animation:ringSpin 28s linear infinite; filter:blur(.2px)}
+    @keyframes ringSpin{to{transform:rotate(360deg)}}
+    .halo{position:absolute; inset:-8%; border-radius:50%; pointer-events:none; opacity:.35; box-shadow:0 0 120px 30px var(--accent), 0 0 220px 50px var(--accent2)}
+
+    aside#panel{overflow:auto; border-radius:var(--r); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.06), 0 10px 40px rgba(0,0,0,.25); padding:14px}
+    #panel h2{margin:2px 0 8px; font-weight:900; letter-spacing:.4px}
+
+    .section{margin:10px 0 14px}
+    .card{display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; padding:10px; margin:10px 0; border-radius:14px; background:var(--card); box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+    .meta{display:flex; flex-direction:column; gap:4px}
+    .title{font-weight:800}
+    .desc{color:var(--muted); font-size:14px}
+    .lvl{color:var(--muted); font-size:12px}
+    .price{font-weight:800}
+
+    footer#bar{position:fixed; left:0; right:0; bottom:0; display:flex; gap:10px; align-items:center; justify-content:space-between; padding:12px 14px; z-index:4; background:linear-gradient(to top, rgba(5,6,22,.72), rgba(5,6,22,0))}
+
+    .toast{position:fixed; right:14px; bottom:100px; padding:10px 14px; border-radius:12px; background:rgba(0,0,0,.6); box-shadow:0 0 0 1px rgba(255,255,255,.08); color:#d8f8ff; z-index:10; opacity:0; transform:translateY(10px); animation:toast 2.4s ease forwards}
+    @keyframes toast{10%{opacity:1; transform:translateY(0)} 90%{opacity:1} 100%{opacity:0; transform:translateY(10px)}}
+
+    #fx{position:fixed; inset:0; pointer-events:none; z-index:9}
+    .pop{position:absolute; color:#fff; font-weight:900; text-shadow:0 0 10px rgba(255,255,255,.35); opacity:0; transform:translate(-50%, -50%) translateY(10px) scale(.9); animation:pop 800ms ease-out forwards}
+    @keyframes pop{10%{opacity:1} 100%{opacity:0; transform:translate(-50%,-50%) translateY(-30px) scale(1)}}
+
+    .modal{position:fixed; inset:0; display:none; place-items:center; z-index:6; background:rgba(0,0,0,.4)}
+    .modal.show{display:grid}
+    .box{width:min(720px, 94vw); max-height:82vh; overflow:auto; border-radius:18px; background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03)); box-shadow:inset 0 0 0 1px rgba(255,255,255,.08), var(--shadow); padding:14px}
+    .box h3{margin:0 0 10px}
+    .list{display:grid; gap:8px}
+    .row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px; border-radius:12px; background:rgba(255,255,255,.05)}
+
+  </style>
+</head>
+<body>
+  <canvas id="stars"></canvas>
+  <div id="nebula"></div>
+  <div id="vignette"></div>
+  <div id="fx" aria-hidden="true"></div>
+
+  <header id="hud">
+    <div class="left">
+      <div class="chip"><small>Игрок</small> <b id="user">Гость</b></div>
+      <div class="chip"><small>Энергия</small> <b id="energy">0</b></div>
+      <div class="chip"><small>в сек.</small> <b id="perSec">0</b></div>
+      <div class="chip"><small>Множитель</small> <b id="mult">x1</b></div>
+      <div class="chip"><small>Престиж</small> <b id="prestige">0</b></div>
+    </div>
+    <div class="right">
+      <button id="saveBtn" class="btn">Сохранить</button>
+      <button id="syncBtn" class="btn ghost" title="Синхронизировать с Telegram CloudStorage (если доступно)">Синхр.</button>
+      <button id="resetBtn" class="btn ghost danger">Сброс</button>
+    </div>
+  </header>
+
+  <main id="app">
+    <section id="stage">
+      <div id="arena">
+        <div class="orbit o1"></div>
+        <div class="orbit o2"></div>
+        <div class="orbit o3"></div>
+        <button id="planet" aria-label="Клик — добыть энергию">
+          <span class="rings" aria-hidden="true"></span>
+          <span class="halo" aria-hidden="true"></span>
+        </button>
+      </div>
+    </section>
+
+    <aside id="panel">
+      <h2>Станции и улучшения</h2>
+
+      <div class="section" id="generators"></div>
+
+      <div class="section" id="upgrades">
+        <!-- динамически -->
+      </div>
+
+      <div class="section">
+        <button id="achBtn" class="btn ghost" style="width:100%">Достижения</button>
+        <button id="lbBtn" class="btn ghost" style="width:100%; margin-top:8px">Лидерборд</button>
+        <button id="prestigeBtn" class="btn good" style="width:100%; margin-top:8px">Престиж (сброс за буст)</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer id="bar">
+    <div class="chip"><small>Всего добыто</small> <b id="total">0</b></div>
+    <div class="right">
+      <button id="shareBtn" class="btn">Поделиться результатом</button>
+    </div>
+  </footer>
+
+  <!-- Модалки -->
+  <div id="achModal" class="modal" role="dialog" aria-label="Достижения">
+    <div class="box">
+      <h3>Достижения</h3>
+      <div id="achList" class="list"></div>
+      <div style="display:flex; justify-content:flex-end; margin-top:10px"><button class="btn ghost" onclick="this.closest('.modal').classList.remove('show')">Закрыть</button></div>
+    </div>
+  </div>
+
+  <div id="lbModal" class="modal" role="dialog" aria-label="Рейтинг">
+    <div class="box">
+      <h3>Таблица лидеров</h3>
+      <div class="list" id="lbLocal"></div>
+      <div class="list" id="lbGlobal" style="margin-top:12px"></div>
+      <div style="display:flex; justify-content:space-between; margin-top:10px">
+        <button id="lbRefresh" class="btn ghost">Обновить</button>
+        <div style="display:flex; gap:8px">
+          <button id="lbShare" class="btn">Поделиться рекордом</button>
+          <button class="btn ghost" onclick="this.closest('.modal').classList.remove('show')">Закрыть</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  ;(() => {
+    const $ = (s, r=document) => r.querySelector(s);
+    const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+
+    // ===== Telegram Mini App integration =====
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    if (tg){
+      try{
+        tg.ready();
+        tg.expand();
+        if (tg.setHeaderColor) tg.setHeaderColor('#0a0e2a');
+        if (tg.HapticFeedback?.impactOccurred) tg.HapticFeedback.impactOccurred('soft');
+      }catch(e){}
+    }
+
+    const getTGUser = () => tg?.initDataUnsafe?.user || null;
+    const openTG = (url) => {
+      if (tg?.openTelegramLink) tg.openTelegramLink(url);
+      else if (tg?.openLink) tg.openLink(url);
+      else window.open(url, '_blank');
+    };
+
+    // ===== Game data =====
+    const GEN = [
+      { key:'drones',  name:'Дроны‑сборщики', base:0.8, cost:20,  grow:1.15, desc:'Базовая пассивная добыча' },
+      { key:'station', name:'Орбитальная станция', base:7,   cost:150, grow:1.16, desc:'Средний пассивный доход' },
+      { key:'dyson',   name:'Узел Дайсона',        base:55,  cost:900, grow:1.17, desc:'Серьёзная генерация' },
+      { key:'anomaly', name:'Аномалия сингулярности', base:420, cost:6500, grow:1.18, desc:'Колоссальная энергия' }
+    ];
+
+    const UPGR = [
+      { key:'tap',   name:'Оверклок кликов',    desc:'+60% к энергии за клик',     base:60,  grow:1.22, apply:s=>s.tapMul*=1.6 },
+      { key:'gen',   name:'Квантовый компрессор', desc:'+25% к пассивной добыче',   base:120, grow:1.25, apply:s=>s.genMul*=1.25 },
+      { key:'fusion',name:'Термоядро',           desc:'Все источники x1.2',         base:400, grow:1.32, apply:s=>{s.tapMul*=1.2; s.genMul*=1.2;} },
+    ];
+
+    const ACH = [
+      { id:'firstClick', name:'Первый импульс', cond:s=>s.clicks>=1,  reward:50 },
+      { id:'hundred',    name:'Сто энергии',    cond:s=>s.total>=100, reward:120 },
+      { id:'thousand',   name:'Тысяча энергии', cond:s=>s.total>=1000,reward:350 },
+      { id:'buyer',      name:'Первая станция', cond:s=>sumOwned(s)>=1, reward:100 },
+      { id:'swarm',      name:'Рой дронов',     cond:s=>s.gen.drones>=10, reward:250 },
+      { id:'prestige1',  name:'Рождение звезды',cond:s=>s.prestige>0,   reward:0 },
+    ];
+
+    const MILE = [
+      { id:'m1', name:'Граница орбиты', cond:s=>s.total>=2500, effect:s=>{s.tapMul*=1.15; s.genMul*=1.1}, desc:'+15% к клику и +10% к пассиву' },
+      { id:'m2', name:'Неоновая буря',  cond:s=>s.total>=25000, effect:s=>{s.tapMul*=1.2; s.genMul*=1.15}, desc:'+20% к клику и +15% к пассиву' },
+      { id:'m3', name:'Пульсар',        cond:s=>s.total>=250000, effect:s=>{s.tapMul*=1.25; s.genMul*=1.2}, desc:'+25%/+20%' },
+    ];
+
+    const state = {
+      v:1,
+      user:null,
+      energy:0, total:0, clicks:0,
+      tapBase:1, tapMul:1,
+      genMul:1,
+      gen: { drones:0, station:0, dyson:0, anomaly:0 },
+      up: { tap:0, gen:0, fusion:0 },
+      ach: {}, mile: {},
+      prestige:0, prestigeMul:1,
+      best:0,
+      last: Date.now()
+    };
+
+    // ===== Math helpers =====
+    const fmt = (n) => {
+      if (!isFinite(n)) return '∞';
+      const abs = Math.abs(n);
+      if (abs < 1000) return Math.floor(n).toString();
+      const u = ['K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','De'];
+      let i=-1, v=n; while (Math.abs(v)>=1000 && i<u.length-1){ v/=1000; i++; }
+      return v.toFixed(v<10?2:v<100?1:0)+u[i];
+    };
+
+    const tapGain = () => state.tapBase * state.tapMul * state.prestigeMul;
+    const genPerSec = () => {
+      let ps = 0;
+      for (const g of GEN){ ps += g.base * state.gen[g.key] * Math.pow(1.08, state.gen[g.key]); }
+      ps *= state.genMul * state.prestigeMul;
+      return ps;
+    };
+
+    const genCost = (g, owned) => Math.floor(g.cost * Math.pow(g.grow, owned));
+    const upCost  = (u, lvl)   => Math.floor(u.base * Math.pow(u.grow, lvl));
+
+    const sumOwned = (s=state) => Object.values(s.gen).reduce((a,b)=>a+b,0);
+
+    // ===== Save / Load (localStorage + Telegram CloudStorage when available) =====
+    const LKEY = 'space_clicker_save_v1';
+
+    const saveLocal = () => { try{ localStorage.setItem(LKEY, JSON.stringify(state)); toast('Сохранено'); }catch(e){} };
+    const loadLocal = () => { try{ const raw = localStorage.getItem(LKEY); if (raw){ Object.assign(state, JSON.parse(raw)); } }catch(e){} };
+
+    async function saveCloud(){
+      if (!tg?.CloudStorage) return false;
+      try{
+        const data = JSON.stringify(state);
+        if (!tg.initDataUnsafe?.user){ await tg.requestWriteAccess?.(); }
+        await tg.CloudStorage.setItem('sc_save', data);
+        toast('Синхронизировано с Telegram');
+        return true;
+      }catch(e){ toast('CloudStorage недоступен'); return false; }
+    }
+    async function loadCloud(){
+      if (!tg?.CloudStorage) return false;
+      try{
+        const data = await tg.CloudStorage.getItem('sc_save');
+        if (data){ Object.assign(state, JSON.parse(data)); toast('Загружено из Telegram'); updateUI(true); return true; }
+        return false;
+      }catch(e){ return false; }
+    }
+
+    // ===== Optional Global Leaderboard (requires backend). Set endpoint to enable. =====
+    const SCORE_ENDPOINT = "https://YOUR-DOMAIN/api/score"; // поменяй на свой домен
+    async function submitScore(score){
+      if (!SCORE_ENDPOINT || !tg?.initData) return false;
+      try{
+        const r = await fetch(SCORE_ENDPOINT + '/submit', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ score: Math.floor(score), initData: tg.initData })
+        });
+        return r.ok;
+      }catch(e){ return false; }
+    }
+    async function fetchTop(){
+      if (!SCORE_ENDPOINT) return null;
+      try{ const r = await fetch(SCORE_ENDPOINT + '/top?limit=10'); if (!r.ok) return null; return await r.json(); }catch(e){ return null; }
+    }
+
+    // ===== UI build =====
+    function buildGenerators(){
+      const wrap = $('#generators'); wrap.innerHTML = '<h3 style="margin:6px 0">Станции</h3>';
+      for (const g of GEN){
+        const owned = state.gen[g.key]||0; const price = genCost(g, owned);
+        const card = document.createElement('div'); card.className='card'; card.dataset.key=g.key;
+        card.innerHTML = `
+          <div class="meta">
+            <div class="title">${g.name}</div>
+            <div class="desc">${g.desc}</div>
+            <div class="lvl">В наличии: <span class="owned">${owned}</span></div>
+          </div>
+          <div>
+            <div class="price">Цена: <span class="priceVal">${fmt(price)}</span></div>
+            <button class="btn buy">Купить</button>
+          </div>`;
+        $('.buy', card).onclick = () => buyGen(g.key);
+        wrap.appendChild(card);
+      }
+    }
+
+    function buildUpgrades(){
+      const wrap = $('#upgrades'); wrap.innerHTML = '<h3 style="margin:6px 0">Улучшения</h3>';
+      for (const u of UPGR){
+        const lvl = state.up[u.key]||0; const price = upCost(u, lvl);
+        const card = document.createElement('div'); card.className='card'; card.dataset.key=u.key;
+        card.innerHTML = `
+          <div class="meta">
+            <div class="title">${u.name}</div>
+            <div class="desc">${u.desc}</div>
+            <div class="lvl">Уровень: <span class="level">${lvl}</span></div>
+          </div>
+          <div>
+            <div class="price">Цена: <span class="priceVal">${fmt(price)}</span></div>
+            <button class="btn buy">Купить</button>
+          </div>`;
+        $('.buy', card).onclick = () => buyUpgrade(u.key);
+        wrap.appendChild(card);
+      }
+    }
+
+    function renderAchievements(){
+      const box = $('#achList'); box.innerHTML='';
+      for (const a of ACH){
+        const done = !!state.ach[a.id];
+        const row = document.createElement('div'); row.className='row';
+        row.innerHTML = `<div>${done?'✅':'⬜️'} <b>${a.name}</b> ${done?'<span class="muted">получено</span>':''}</div><div class="muted">награда: ${fmt(a.reward)}</div>`;
+        box.appendChild(row);
+      }
+      for (const m of MILE){
+        const done = !!state.mile[m.id];
+        const row = document.createElement('div'); row.className='row';
+        row.innerHTML = `<div>${done?'🌟':'⬜️'} <b>${m.name}</b> <span class="muted">${m.desc}</span></div>`;
+        box.appendChild(row);
+      }
+    }
+
+    function renderLocalLB(){
+      const el = $('#lbLocal');
+      const local = JSON.parse(localStorage.getItem('sc_local_lb')||'[]');
+      const best = Math.floor(state.best||0);
+      const list = [...local, {name: state.user?.first_name||'Вы', score: best}]
+        .sort((a,b)=>b.score-a.score).slice(0,10);
+      el.innerHTML = '<h4 style="margin:0">Локальные рекорды</h4>' +
+        list.map((x,i)=>`<div class="row"><div>#${i+1} ${x.name}</div><b>${fmt(x.score)}</b></div>`).join('');
+    }
+
+    async function renderGlobalLB(){
+      const el = $('#lbGlobal');
+      const top = await fetchTop();
+      if (!top){ el.innerHTML = '<div class="row"><div class="muted">Глобальный рейтинг не подключён</div></div>'; return; }
+      el.innerHTML = '<h4 style="margin:8px 0 0">Глобальный рейтинг</h4>' +
+        top.map((x,i)=>`<div class="row"><div>#${i+1} ${x.name}</div><b>${fmt(x.score)}</b></div>`).join('');
+    }
+
+    // ===== Actions =====
+    function buyGen(key){
+      const g = GEN.find(x=>x.key===key); const owned = state.gen[key]||0; const price = genCost(g, owned);
+      if (state.energy < price){ buzz(); return; }
+      state.energy -= price; state.gen[key] = owned+1; chime();
+      updateUI(true); save();
+    }
+    function buyUpgrade(key){
+      const u = UPGR.find(x=>x.key===key); const lvl = state.up[key]||0; const price = upCost(u, lvl);
+      if (state.energy < price){ buzz(); return; }
+      state.energy -= price; state.up[key] = lvl+1; u.apply(state); chime();
+      updateUI(true); save();
+    }
+
+    function doPrestige(){
+      const earned = Math.floor(Math.sqrt(state.total/25000)); // мягкая формула
+      if (earned<=0){ toast('Недостаточно для престижа'); buzz(); return; }
+      state.prestige += earned;
+      state.prestigeMul = 1 + state.prestige * 0.07; // +7% за кристалл
+      // сброс прогресса, кроме рекордов и достижений
+      const keep = { prestige: state.prestige, prestigeMul: state.prestigeMul, best: state.best, ach: state.ach, mile: state.mile, user: state.user };
+      Object.assign(state, {
+        v:1, user:keep.user, energy:0, total:0, clicks:0, tapBase:1, tapMul:1, genMul:1,
+        gen:{drones:0,station:0,dyson:0,anomaly:0}, up:{tap:0,gen:0,fusion:0},
+        ach: keep.ach, mile: keep.mile, prestige: keep.prestige, prestigeMul: keep.prestigeMul, best: keep.best, last:Date.now()
+      });
+      warp(); toast(`Престиж +${earned} • общий ${state.prestige}`);
+      updateUI(true); save();
+    }
+
+    // ===== Effects =====
+    const fx = $('#fx');
+    function pop(text, x, y){ const s=document.createElement('div'); s.className='pop'; s.textContent=text; s.style.left=x+'px'; s.style.top=y+'px'; fx.appendChild(s); setTimeout(()=>s.remove(), 900); }
+    function toast(text){ const t=document.createElement('div'); t.className='toast'; t.textContent=text; document.body.appendChild(t); setTimeout(()=>t.remove(), 2500); }
+
+    // Particles
+    const particles=[]; const cvs=$('#stars'), ctx=cvs.getContext('2d'); let W,H,DPR=Math.max(1,Math.min(2,devicePixelRatio||1));
+    function resize(){ W=cvs.width=Math.floor(innerWidth*DPR); H=cvs.height=Math.floor(innerHeight*DPR); cvs.style.width=innerWidth+'px'; cvs.style.height=innerHeight+'px'; }
+    window.addEventListener('resize', resize); resize();
+
+    function spawn(x,y,clr){
+      for(let i=0;i<18;i++){
+        particles.push({x:x*DPR,y:y*DPR,vx:(Math.random()-0.5)*180,vy:(Math.random()-0.5)*180,life:1,clr});
+      }
+    }
+
+    function draw(dt){
+      ctx.clearRect(0,0,W,H);
+      // background stars
+      ctx.globalAlpha=.8; for(let i=0;i<Math.floor((innerWidth*innerHeight)/9000);i++){
+        const sx=(i*97%W), sy=(i*57%H), r=(i%3+1)/DPR; ctx.fillStyle='#cfe8ff'; ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2); ctx.fill();
+      }
+      // particles
+      for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.98; p.vy*=0.98; p.life-=dt*1.5; if(p.life<=0){particles.splice(i,1); continue;} ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.clr; ctx.beginPath(); ctx.arc(p.x,p.y,2.4*DPR,0,Math.PI*2); ctx.fill(); }
+      ctx.globalAlpha=1;
+    }
+
+    // ===== Audio (WebAudio, без файлов) =====
+    let AC=null; function audio(){ if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); } return AC; }
+    function tone(freq=440,dur=.06,type='sine',vol=.05){ if(!AC) return; const o=AC.createOscillator(); const g=AC.createGain(); o.type=type; o.frequency.value=freq; o.connect(g); g.connect(AC.destination); const t=AC.currentTime; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+.005); g.gain.exponentialRampToValueAtTime(0.001,t+dur); o.start(t); o.stop(t+dur+.02); }
+    function ping(){ tone(740,.04,'triangle',.045); tg?.HapticFeedback?.impactOccurred('light'); }
+    function buzz(){ tone(140,.12,'sawtooth',.05); tg?.HapticFeedback?.notificationOccurred('error'); }
+    function chime(){ tone(880,.07,'sine',.05); setTimeout(()=>tone(1320,.09,'sine',.04), 60); tg?.HapticFeedback?.notificationOccurred('success'); }
+    function warp(){ tone(420,.08,'sawtooth',.06); setTimeout(()=>tone(240,.20,'sine',.04), 70); }
+
+    // ===== Achievements & milestones =====
+    function checkAch(){
+      for (const a of ACH){ if (!state.ach[a.id] && a.cond(state)){ state.ach[a.id]=true; state.energy+=a.reward; toast(`Достижение: ${a.name} +${fmt(a.reward)}`); chime(); } }
+      for (const m of MILE){ if (!state.mile[m.id] && m.cond(state)){ state.mile[m.id]=true; m.effect(state); toast(`Милстоун: ${m.name}`); chime(); } }
+    }
+
+    // ===== Update UI =====
+    function updateUI(force=false){
+      $('#user').textContent = state.user?.first_name || 'Гость';
+      $('#energy').textContent = fmt(state.energy);
+      $('#perSec').textContent = fmt(genPerSec());
+      $('#mult').textContent = 'x' + (state.prestigeMul*state.tapMul).toFixed(2);
+      $('#prestige').textContent = state.prestige;
+      $('#total').textContent = fmt(state.total);
+
+      // generators
+      $$('#generators .card').forEach(card=>{
+        const key = card.dataset.key; const g = GEN.find(x=>x.key===key); const owned=state.gen[key];
+        $('.owned', card).textContent = owned;
+        $('.priceVal', card).textContent = fmt(genCost(g, owned));
+      });
+      // upgrades
+      $$('#upgrades .card').forEach(card=>{
+        const key=card.dataset.key; const u=UPGR.find(x=>x.key===key); const lvl=state.up[key];
+        $('.level', card).textContent = lvl; $('.priceVal', card).textContent = fmt(upCost(u, lvl));
+      });
+
+      // enable/disable buttons lightly
+      $$('#panel .card').forEach(card=>{
+        const buy=$('.buy',card); const key=card.dataset.key; let price=0;
+        if (GEN.find(x=>x.key===key)) price=genCost(GEN.find(x=>x.key===key), state.gen[key]);
+        else price=upCost(UPGR.find(x=>x.key===key), state.up[key]);
+        buy.disabled = state.energy < price;
+      });
+    }
+
+    // ===== Saving helper =====
+    function save(){ try{ localStorage.setItem(LKEY, JSON.stringify(state)); }catch(e){} }
+
+    // ===== Click handling =====
+    const planet = $('#planet');
+    let lastClickSound = 0;
+    planet.addEventListener('click', (e)=>{
+      if (!AC) audio();
+      const g = tapGain();
+      state.energy += g; state.total += g; state.clicks++;
+      const r = planet.getBoundingClientRect();
+      const x = Math.max(r.left, Math.min(e.clientX||r.left+r.width/2, r.right));
+      const y = Math.max(r.top, Math.min(e.clientY||r.top+r.height/2, r.bottom));
+      pop(`+${fmt(g)}`, x, y);
+      spawn(x, y, ['#00e5ff','#9b5cff','#ff4df8'][Math.floor(Math.random()*3)]);
+      const now=performance.now(); if (now-lastClickSound>40){ ping(); lastClickSound=now; }
+      checkAch();
+      updateUI();
+    });
+
+    // ===== Buttons =====
+    $('#saveBtn').onclick = saveLocal;
+    $('#syncBtn').onclick = async()=>{ const ok = await saveCloud(); if(!ok) buzz(); };
+    $('#resetBtn').onclick = ()=>{ if (!confirm('Сбросить прогресс?')) return; localStorage.removeItem(LKEY); localStorage.removeItem('sc_local_lb'); Object.assign(state, {v:1, user:getTGUser(), energy:0,total:0,clicks:0,tapBase:1,tapMul:1,genMul:1, gen:{drones:0,station:0,dyson:0,anomaly:0}, up:{tap:0,gen:0,fusion:0}, ach:{}, mile:{}, prestige:0, prestigeMul:1, best:0, last:Date.now()}); updateUI(true); toast('Сброшено'); };
+
+    $('#achBtn').onclick = ()=>{ renderAchievements(); $('#achModal').classList.add('show'); };
+    $('#lbBtn').onclick = async()=>{ renderLocalLB(); await renderGlobalLB(); $('#lbModal').classList.add('show'); };
+    $('#lbRefresh').onclick = async()=>{ renderLocalLB(); await renderGlobalLB(); };
+    $('#lbShare').onclick = shareScore;
+    $('#shareBtn').onclick = shareScore;
+    $('#prestigeBtn').onclick = doPrestige;
+
+    function shareScore(){
+      const best = Math.floor(state.best||state.total||0);
+      const text = `Мой рекорд в Space Clicker: ${fmt(best)} ⚡\nИспытай себя: `;
+      const link = location.href;
+      openTG(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+    }
+
+    // ===== Loop =====
+    let lastT = performance.now(); let acc=0;
+    function loop(t){
+      const dt = Math.min(0.05, (t-lastT)/1000); lastT=t; acc+=dt;
+      const ps = genPerSec();
+      if (ps>0){ state.energy += ps*dt; state.total += ps*dt; }
+      if (state.total>state.best){ state.best = state.total; }
+      if (acc>0.1){ updateUI(); acc=0; }
+      draw(dt);
+      requestAnimationFrame(loop);
+    }
+
+    // ===== Init =====
+    function init(){
+      if (tg){ state.user = getTGUser(); if (tg.MainButton){ tg.MainButton.setText('Поделиться'); tg.MainButton.onClick(shareScore); tg.MainButton.show(); } }
+      buildGenerators(); buildUpgrades(); loadLocal(); updateUI(true);
+      // offline gains
+      const delta = Math.max(0, (Date.now() - (state.last||Date.now()))/1000);
+      const gain = genPerSec()*delta*0.5; // половина оффлайн дохода
+      if (gain>0){ state.energy+=gain; state.total+=gain; toast(`Оффлайн: +${fmt(gain)}`); }
+      state.last = Date.now(); save();
+      requestAnimationFrame(loop);
+      setInterval(()=>save(), 10000);
+      window.addEventListener('beforeunload', ()=>save());
+      // try load cloud silently
+      setTimeout(()=>loadCloud().then(ok=>ok&&updateUI(true)), 1000);
+    }
+
+    init();
+  })();
+  </script>
+</body>
+</html>
